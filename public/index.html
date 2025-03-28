@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>儲值扣款</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* 內嵌 CSS 只用來簡單微調，不與 style.css 衝突 */
+    .my-centered-text { text-align: center; }
+    .page-break { page-break-after: always; }
+    /* 客戶下拉與操作按鈕 */
+    #customer-select { width: 100%; padding: 10px; margin-bottom: 10px; font-size: 1em; }
+    /* 客戶名片樣式 */
+    #customer-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #customer-card h3 { margin-bottom: 10px; }
+    #customer-card p { margin: 6px 0; }
+    #customer-card .btn-group {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    #customer-card .btn-group button {
+      flex: 1;
+      min-width: 60px;
+      padding: 8px;
+      font-size: 0.9em;
+    }
+    hr { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+    /* 匯出按鈕 */
+    #export-btn {
+      padding: 10px;
+      font-size: 1em;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+    /* ===== 針對列印時的設定 ===== */
+    @media print {
+      @page { size: 80mm auto; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      #receipt-print-area { display: block; margin: 0 auto; max-width: 80mm; }
+    }
+    /* 更新付款狀態 Modal */
+    #payment-status-modal {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+    #payment-status-modal .modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      width: 90%;
+      max-width: 400px;
+    }
+    #payment-status-modal select,
+    #payment-status-modal button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="notification"></div>
+    <h1>儲值扣款</h1>
+    
+    <!-- 新增客戶 -->
+    <div class="section" id="new-customer-section">
+      <h2>新增客戶</h2>
+      <form id="new-customer-form">
+        <input type="text" id="new-customer-username" placeholder="請輸入客戶名稱" required autocomplete="off" />
+        <select id="payment-status" required>
+          <option value="" disabled selected>請選擇收款狀態</option>
+          <option value="已收款">已收款</option>
+          <option value="未收款">未收款</option>
+        </select>
+        <select id="plan-selection" required>
+          <option value="" disabled selected>請選擇方案</option>
+          <option value="1">方案1：儲值5500元，贈送300元</option>
+          <option value="2">方案2：儲值11000元，贈送800元</option>
+          <option value="3">方案3：儲值16500元，贈送1500元</option>
+        </select>
+        <button type="submit">新增客戶</button>
+      </form>
+    </div>
+    
+    <!-- 搜尋客戶 -->
+    <div class="section" id="search-section">
+      <h2>搜尋客戶</h2>
+      <input type="text" id="search-keyword" placeholder="輸入客戶名稱關鍵字" />
+      <button onclick="searchCustomers()">搜尋</button>
+      <button onclick="fetchCustomers()">顯示全部</button>
+    </div>
+    
+    <!-- 匯出客戶資料按鈕 -->
+    <div class="section" id="export-section">
+      <button id="export-btn" onclick="exportCustomerData()">匯出客戶資料</button>
+    </div>
+    
+    <!-- 客戶列表 (下拉式選單) -->
+    <div class="section" id="customers-section">
+      <h2>客戶列表</h2>
+      <select id="customer-select">
+        <option value="" disabled selected>請選擇客戶</option>
+      </select>
+    </div>
+    
+    <!-- 客戶名片 (選到客戶後顯示) -->
+    <div class="section" id="customer-card"></div>
+    
+    <!-- 客戶交易紀錄 -->
+    <div class="section" id="transactions-section">
+      <h2>客戶交易紀錄</h2>
+      <div id="transactions-display"></div>
+    </div>
+  </div>
+  
+  <!-- 各式 Modal -->
+  <!-- 儲值 Modal -->
+  <div id="deposit-modal" class="modal">
+    <div class="modal-content">
+      <h3>儲值</h3>
+      <select id="deposit-plan" required>
+        <option value="" disabled selected>請選擇儲值方案</option>
+        <option value="1">方案1：儲值5500元，贈送300元</option>
+        <option value="2">方案2：儲值11000元，贈送800元</option>
+        <option value="3">方案3：儲值16500元，贈送1500元</option>
+        <option value="custom">自訂金額</option>
+      </select>
+      <input type="number" id="custom-deposit-amount" placeholder="自訂金額" disabled />
+      <button id="toggle-deposit-remark">新增備註</button>
+      <input type="text" id="deposit-remark" placeholder="輸入備註" style="display:none; margin-top:5px;" />
+      <button id="deposit-confirm">確認儲值</button>
+      <button id="deposit-cancel">取消</button>
+    </div>
+  </div>
+  
+  <!-- 扣款 Modal（多筆扣款） -->
+  <div id="withdraw-modal" class="modal">
+    <div class="modal-content">
+      <h3>扣款（多筆）</h3>
+      <select id="withdraw-item-name">
+        <option value="" disabled selected>請選擇品項</option>
+        <option value="白蛋">白蛋</option>
+        <option value="白紅仁">白紅仁</option>
+        <option value="粉蛋">粉蛋</option>
+        <option value="烏骨雞">烏骨雞</option>
+        <option value="靈芝">靈芝</option>
+        <option value="一般紅">一般紅</option>
+        <option value="NG蛋">NG蛋</option>
+        <option value="鹹蛋">鹹蛋</option>
+        <option value="皮蛋">皮蛋</option>
+        <option value="三味蛋">三味蛋</option>
+        <option value="松花皮蛋">松花皮蛋</option>
+        <option value="滷蛋">滷蛋</option>
+        <option value="白盒">白盒</option>
+        <option value="紅盒">紅盒</option>
+        <option value="粉盒">粉盒</option>
+        <option value="烏骨雞盒">烏骨雞盒</option>
+        <option value="滷蛋">滷蛋</option>
+        <option value="茶葉蛋">茶葉蛋</option>
+        <option value="NG蛋">NG蛋</option>
+        <option value="蛋黃液">蛋黃液</option>
+      </select>
+      <input type="number" id="withdraw-item-price" placeholder="單價 (可為 0)" />
+      <input type="number" id="withdraw-item-quantity" value="1" min="1" />
+      <input type="text" id="withdraw-item-note" placeholder="備註 (可不填)" />
+      <button id="add-withdraw-item">加入清單</button>
+      <hr />
+      <div id="withdraw-items-list"></div>
+      <button id="withdraw-confirm">確認扣款</button>
+      <button id="withdraw-cancel">取消</button>
+    </div>
+  </div>
+  
+  <!-- 調整配送日期 Modal -->
+  <div id="delivery-date-modal" class="modal">
+    <div class="modal-content">
+      <h3>調整配送日期</h3>
+      <!-- 每次開啟時清空配送日期輸入欄位 -->
+      <input type="text" id="new-delivery-date" placeholder="請輸入配送日期 (格式: 8碼YYYYMMDD, 4碼MMDD, 或 YYYY-MM-DD)" value="" />
+      <button id="update-delivery-date-btn">更新配送日期</button>
+      <button onclick="document.getElementById('delivery-date-modal').style.display='none'">取消</button>
+    </div>
+  </div>
+  
+  <!-- 刪除確認 Modal 1 -->
+  <div id="delete-modal-1" class="modal">
+    <div class="modal-content">
+      <h3>刪除確認</h3>
+      <p>請確認是否要刪除此客戶？</p>
+      <button id="delete-confirm-1">確認</button>
+      <button id="delete-cancel-1">取消</button>
+    </div>
+  </div>
+  
+  <!-- 刪除確認 Modal 2 -->
+  <div id="delete-modal-2" class="modal">
+    <div class="modal-content">
+      <h3>刪除再次確認</h3>
+      <p>請再次確認是否真的要刪除此客戶？</p>
+      <button id="delete-confirm-2">確認</button>
+      <button id="delete-cancel-2">取消</button>
+    </div>
+  </div>
+  
+  <!-- 更新付款狀態 Modal -->
+  <div id="payment-status-modal">
+    <div class="modal-content">
+      <h3>更新付款狀態</h3>
+      <select id="new-payment-status">
+        <option value="未收款">未收款</option>
+        <option value="已收款">已收款</option>
+      </select>
+      <button id="update-payment-status-btn">更新付款狀態</button>
+      <button onclick="document.getElementById('payment-status-modal').style.display='none'">取消</button>
+    </div>
+  </div>
+  
+  <!-- 收據列印區塊（列印時會顯示此區塊內容） -->
+  <div id="receipt-print-area" style="display: none;"></div>
+  
+  <script>
+    /**********************************
+     * 主要 JS 程式碼
+     **********************************/
+    function formatAmount(amount) {
+      const num = parseFloat(amount);
+      return num % 1 === 0 ? num.toString() : num.toFixed(2);
+    }
+    function getLocalDateString() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    function showNotification(msg, type = "success") {
+      const n = document.getElementById("notification");
+      n.textContent = msg;
+      n.className = type;
+      n.style.display = "block";
+      setTimeout(() => { n.style.display = "none"; }, 3000);
+    }
+    
+    // 方案對照
+    const schemes = {
+      "1": { deposit: 5500, gift: 300, total: 5800 },
+      "2": { deposit: 11000, gift: 800, total: 11800 },
+      "3": { deposit: 16500, gift: 1500, total: 18000 }
+    };
+    
+    let currentCustomerId = null;
+    let customerToDelete = null;
+    let currentCustomerIdForDate = null;
+    let currentCustomerIdForPayment = null;
+    let withdrawItems = [];
+    let customersList = [];
+    
+    function getInitialBalance(plan) {
+      switch(plan) {
+        case "1": return 5500 + 300;
+        case "2": return 11000 + 800;
+        case "3": return 16500 + 1500;
+        default: return 0;
+      }
+    }
+    
+    /************** 客戶資料相關 **************/
+    async function addCustomer(e) {
+      e.preventDefault();
+      const username = document.getElementById('new-customer-username').value.trim();
+      const plan = document.getElementById('plan-selection').value;
+      const paymentStatus = document.getElementById('payment-status').value;
+      if (!username || !plan || !paymentStatus) {
+        showNotification("請完整填寫客戶名稱、方案、收款狀態", "error");
+        return;
+      }
+      const balance = getInitialBalance(plan);
+      try {
+        const res = await fetch('/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, balance, payment_status: paymentStatus, plan })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showNotification("新增客戶成功！");
+          fetchCustomers();
+          document.getElementById('new-customer-form').reset();
+        } else {
+          showNotification("新增客戶失敗: " + data.error, "error");
+        }
+      } catch (err) {
+        showNotification("發生錯誤: " + err.message, "error");
+      }
+    }
+    
+    async function fetchCustomers() {
+      try {
+        const res = await fetch('/users');
+        const arr = await res.json();
+        if (!Array.isArray(arr)) {
+          showNotification("返回的客戶資料格式錯誤", "error");
+          return;
+        }
+        updateCustomerDropdown(arr);
+      } catch (err) {
+        showNotification("無法加載客戶資料: " + err.message, "error");
+      }
+    }
+    
+    async function searchCustomers() {
+      const kw = document.getElementById('search-keyword').value.trim();
+      try {
+        const res = await fetch(`/users?search=${encodeURIComponent(kw)}`);
+        const arr = await res.json();
+        if (!Array.isArray(arr)) {
+          showNotification("返回的客戶資料格式錯誤", "error");
+          return;
+        }
+        updateCustomerDropdown(arr);
+      } catch (err) {
+        showNotification("搜尋錯誤: " + err.message, "error");
+      }
+    }
+    
+    // 匯出客戶資料 (CSV 格式)
+    function exportCustomerData() {
+      if (!customersList || customersList.length === 0) {
+        alert("目前沒有客戶資料可供匯出！");
+        return;
+      }
+      let csvContent = "ID,Username,Balance,Payment Status,Delivery Date,Plan\n";
+      customersList.forEach(c => {
+        const row = [
+          c.id,
+          `"${c.username}"`,
+          c.balance,
+          `"${c.payment_status}"`,
+          `"${c.delivery_date || ''}"`,
+          c.plan
+        ].join(",");
+        csvContent += row + "\n";
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const todayStr = new Date().toISOString().split("T")[0];
+      link.setAttribute("href", url);
+      link.setAttribute("download", `customer_data_${todayStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // 更新客戶下拉選單，根據付款狀態設定文字顏色
+    function updateCustomerDropdown(customers) {
+      customersList = customers;
+      const sel = document.getElementById('customer-select');
+      sel.innerHTML = `<option value="" disabled selected>請選擇客戶</option>`;
+      customers.forEach(c => {
+        const dispDate = c.delivery_date ? parseDeliveryDate(c.delivery_date) : '未設定';
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.username} - ${formatAmount(c.balance)}元 - ${c.payment_status} - 配送:${dispDate}`;
+        if(c.payment_status === "已收款") {
+          opt.style.color = "blue";
+        } else if(c.payment_status === "未收款") {
+          opt.style.color = "red";
+        }
+        sel.appendChild(opt);
+      });
+      sel.onchange = function() {
+        const selectedId = sel.value;
+        const cust = customersList.find(x => x.id == selectedId);
+        updateCustomerCard(cust);
+      };
+      if (currentCustomerId) {
+        const currentCust = customersList.find(x => x.id == currentCustomerId);
+        if (currentCust) {
+          updateCustomerCard(currentCust);
+        } else {
+          document.getElementById('customer-card').style.display = "none";
+        }
+      }
+    }
+    
+    // 更新客戶名片區塊，加入餘額警告訊息
+    function updateCustomerCard(cust) {
+      currentCustomerId = cust.id;
+      const cardDiv = document.getElementById('customer-card');
+      const dispDate = cust.delivery_date ? parseDeliveryDate(cust.delivery_date) : '未設定';
+      let warningMsg = "";
+      if (cust.balance < 0) {
+        warningMsg = "提醒：餘額不足！";
+      } else if (cust.balance < 500) {
+        warningMsg = "提醒：餘額不足！";
+      } else if (cust.balance <= 1000) {
+        warningMsg = "提醒：餘額不足！";
+      }
+      cardDiv.innerHTML = `
+        <h3>${cust.username}</h3>
+        <p>餘額：${formatAmount(cust.balance)}元</p>
+        <p>付款狀態：${cust.payment_status}</p>
+        <p>配送：${dispDate}</p>
+        ${warningMsg ? `<p style="color:red; font-weight:bold;">${warningMsg}</p>` : ""}
+        <div class="btn-group">
+          <button onclick="openDepositModal(${cust.id})">儲值</button>
+          <button onclick="openWithdrawModal(${cust.id})">扣款</button>
+          <button onclick="selectCustomer(${cust.id}, '${cust.username}')">交易紀錄</button>
+          <button onclick="printTodayTransactionsReceipt(${cust.id}, '${cust.username}', ${cust.balance}, '${cust.payment_status}', '${cust.delivery_date || '未設定'}')">列印</button>
+          <button onclick="addNote(${cust.id})">備註</button>
+          <button onclick="openDeliveryDateModal(${cust.id})">配送時間</button>
+          <button onclick="initDeleteCustomer(${cust.id})">刪除客戶</button>
+          ${cust.payment_status === "未收款" ? `<button onclick="openPaymentStatusModal(${cust.id}, '${cust.payment_status}')">更新付款狀態</button>` : ""}
+        </div>
+      `;
+      cardDiv.style.display = "block";
+    }
+    
+    async function selectCustomer(id, username) {
+      await fetchTransactions(id);
+      const note = localStorage.getItem("note_" + id) || "";
+      const noteHTML = note ? `<p style="font-weight:bold; color:green;">備註：${note}</p>` : "";
+      const displayDiv = document.getElementById('transactions-display');
+      displayDiv.insertAdjacentHTML("afterbegin", `<h3>${username} 的最新交易紀錄</h3>${noteHTML}`);
+    }
+    
+    function addNote(cid) {
+      const note = prompt("請輸入備註內容：");
+      if (note !== null) {
+        localStorage.setItem("note_" + cid, note.trim());
+        showNotification("備註已儲存！");
+        fetchTransactions(cid);
+      }
+    }
+    
+    /************** 配送日期格式化 **************/
+    function parseDeliveryDate(ds) {
+      if (!ds) return '';
+      if (ds.length === 8 && /^\d{8}$/.test(ds)) {
+        const mm = parseInt(ds.slice(4, 6), 10);
+        const dd = parseInt(ds.slice(6, 8), 10);
+        if (!isNaN(mm) && !isNaN(dd)) { return `${mm}月${dd}日`; }
+      }
+      if (ds.length === 4 && /^\d{4}$/.test(ds)) {
+        const mm = parseInt(ds.slice(0, 2), 10);
+        const dd = parseInt(ds.slice(2, 4), 10);
+        if (!isNaN(mm) && !isNaN(dd)) { return `${mm}月${dd}日`; }
+      }
+      const isoMatch = ds.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (isoMatch) {
+        const mm = parseInt(isoMatch[2], 10);
+        const dd = parseInt(isoMatch[3], 10);
+        return `${mm}月${dd}日`;
+      }
+      return ds;
+    }
+    
+    /************** 儲值 Modal **************/
+    function openDepositModal(cid) {
+      currentCustomerId = cid;
+      document.getElementById('deposit-plan').value = "";
+      document.getElementById('deposit-modal').style.display = "block";
+    }
+    document.getElementById('deposit-cancel').addEventListener('click', () => {
+      document.getElementById('deposit-modal').style.display = "none";
+    });
+    document.getElementById('deposit-plan').addEventListener('change', function() {
+      const planVal = this.value;
+      const customInput = document.getElementById('custom-deposit-amount');
+      if (planVal === 'custom') { customInput.disabled = false; }
+      else { customInput.disabled = true; customInput.value = ""; }
+    });
+    document.getElementById('toggle-deposit-remark').addEventListener('click', () => {
+      const inp = document.getElementById('deposit-remark');
+      inp.style.display = (inp.style.display === "none" ? "block" : "none");
+    });
+    document.getElementById('deposit-confirm').addEventListener('click', async () => {
+      const plan = document.getElementById('deposit-plan').value;
+      if (!plan) { showNotification("請選擇儲值方案", "error"); return; }
+      let amount = 0;
+      let details = "";
+      if (plan === 'custom') {
+        const cv = parseFloat(document.getElementById('custom-deposit-amount').value);
+        if (isNaN(cv) || cv <= 0) { showNotification("請輸入正確的自訂儲值金額", "error"); return; }
+        amount = cv;
+        details = `自訂金額: ${cv}`;
+      } else {
+        amount = getInitialBalance(plan);
+        details = `方案: ${plan}`;
+      }
+      const remark = document.getElementById('deposit-remark').value.trim();
+      if (remark) { details += `，備註: ${remark}`; }
+      await transaction(currentCustomerId, amount, 'deposit', details);
+      document.getElementById('deposit-modal').style.display = "none";
+    });
+    
+    /************** 扣款 Modal **************/
+    function openWithdrawModal(cid) {
+      currentCustomerId = cid;
+      withdrawItems = [];
+      document.getElementById('withdraw-items-list').innerHTML = "";
+      document.getElementById('withdraw-item-name').selectedIndex = 0;
+      document.getElementById('withdraw-item-price').value = "";
+      document.getElementById('withdraw-item-quantity').value = 1;
+      document.getElementById('withdraw-item-note').value = "";
+      document.getElementById('withdraw-modal').style.display = "block";
+    }
+    document.getElementById('withdraw-cancel').addEventListener('click', () => {
+      document.getElementById('withdraw-modal').style.display = "none";
+    });
+    document.getElementById('add-withdraw-item').addEventListener('click', () => {
+      const sel = document.getElementById('withdraw-item-name');
+      const itemName = sel.value;
+      const price = parseFloat(document.getElementById('withdraw-item-price').value) || 0;
+      const qty = parseInt(document.getElementById('withdraw-item-quantity').value) || 1;
+      const note = document.getElementById('withdraw-item-note').value.trim();
+      if (!itemName) { showNotification("請選擇品項", "error"); return; }
+      if (qty <= 0) { showNotification("數量必須大於 0", "error"); return; }
+      withdrawItems.push({ name: itemName, price, qty, note });
+      updateWithdrawItemsList();
+      sel.selectedIndex = 0;
+      document.getElementById('withdraw-item-price').value = "";
+      document.getElementById('withdraw-item-quantity').value = 1;
+      document.getElementById('withdraw-item-note').value = "";
+    });
+    function updateWithdrawItemsList() {
+      const listDiv = document.getElementById('withdraw-items-list');
+      listDiv.innerHTML = "";
+      let total = 0;
+      withdrawItems.forEach((item, idx) => {
+        const subTotal = item.price * item.qty;
+        total += subTotal;
+        const noteText = item.note ? ` / 備註: ${item.note}` : "";
+        listDiv.innerHTML += `
+          <div style="margin-bottom:4px;">
+            <span>品項：${item.name} / 單價：${item.price} / 數量：${item.qty} / 小計：${subTotal}${noteText}</span>
+            <button onclick="removeWithdrawItem(${idx})" style="margin-left:10px;">刪除</button>
+          </div>
+        `;
+      });
+      listDiv.innerHTML += `<hr/><h4>合計金額：<span style="color:red;">${total}</span></h4>`;
+    }
+    function removeWithdrawItem(index) {
+      withdrawItems.splice(index, 1);
+      updateWithdrawItemsList();
+    }
+    document.getElementById('withdraw-confirm').addEventListener('click', async () => {
+      if (withdrawItems.length === 0) { showNotification("尚未加入任何品項", "error"); return; }
+      let totalAmount = 0;
+      let detailsArr = [];
+      withdrawItems.forEach(i => {
+        const subTotal = i.price * i.qty;
+        totalAmount += subTotal;
+        if (i.note) { detailsArr.push(`${i.name} x ${i.qty} (單價${i.price}) 備註:${i.note}`); }
+        else { detailsArr.push(`${i.name} x ${i.qty} (單價${i.price})`); }
+      });
+      const finalDetails = detailsArr.join(' / ');
+      await transaction(currentCustomerId, totalAmount, 'withdraw', finalDetails);
+      document.getElementById('withdraw-modal').style.display = "none";
+    });
+    
+    /************** 配送日期 Modal **************/
+    function openDeliveryDateModal(cid) {
+      currentCustomerIdForDate = cid;
+      // 每次開啟時清空配送日期輸入欄位
+      document.getElementById('new-delivery-date').value = "";
+      document.getElementById('delivery-date-modal').style.display = "block";
+    }
+    document.getElementById('update-delivery-date-btn').addEventListener('click', async () => {
+      const newDate = document.getElementById('new-delivery-date').value.trim();
+      if (!newDate) { alert("請輸入配送日期"); return; }
+      try {
+        const res = await fetch(`/users/${currentCustomerIdForDate}/delivery-date`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delivery_date: newDate })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert("配送日期更新成功！");
+          fetchCustomers();
+        } else {
+          alert("更新失敗：" + data.error);
+        }
+      } catch (err) {
+        alert("更新錯誤：" + err.message);
+      }
+      document.getElementById('delivery-date-modal').style.display = "none";
+    });
+    
+    /************** 刪除客戶 Modal **************/
+    function initDeleteCustomer(id) {
+      customerToDelete = id;
+      document.getElementById('delete-modal-1').style.display = "block";
+    }
+    document.getElementById('delete-cancel-1').addEventListener('click', () => {
+      document.getElementById('delete-modal-1').style.display = "none";
+    });
+    document.getElementById('delete-confirm-1').addEventListener('click', () => {
+      document.getElementById('delete-modal-1').style.display = "none";
+      document.getElementById('delete-modal-2').style.display = "block";
+    });
+    document.getElementById('delete-cancel-2').addEventListener('click', () => {
+      document.getElementById('delete-modal-2').style.display = "none";
+    });
+    document.getElementById('delete-confirm-2').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/users/${customerToDelete}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          showNotification(data.message);
+          fetchCustomers();
+          document.getElementById('transactions-display').innerHTML = "";
+        } else {
+          showNotification("刪除客戶失敗: " + data.error, "error");
+        }
+      } catch (err) {
+        showNotification("刪除錯誤: " + err.message, "error");
+      }
+      document.getElementById('delete-modal-2').style.display = "none";
+    });
+    
+    /************** 更新付款狀態功能 **************/
+    function openPaymentStatusModal(cid, currentStatus) {
+      currentCustomerIdForPayment = cid;
+      document.getElementById('new-payment-status').value = currentStatus;
+      document.getElementById('payment-status-modal').style.display = "block";
+    }
+    document.getElementById('update-payment-status-btn').addEventListener('click', async () => {
+      const newStatus = document.getElementById('new-payment-status').value;
+      if (!newStatus) { alert("請選擇付款狀態"); return; }
+      try {
+        const res = await fetch(`/users/${currentCustomerIdForPayment}/payment-status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payment_status: newStatus })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert("付款狀態更新成功！");
+          fetchCustomers();
+        } else {
+          alert("更新失敗：" + data.error);
+        }
+      } catch (err) {
+        alert("更新錯誤：" + err.message);
+      }
+      document.getElementById('payment-status-modal').style.display = "none";
+    });
+    
+    /************** 交易功能 **************/
+    async function transaction(cid, amount, type, details = "") {
+      try {
+        const body = { amount };
+        if (details) body.details = details;
+        const res = await fetch(`/users/${cid}/${type}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showNotification(type === 'deposit' ? '儲值成功' : '扣款成功');
+          fetchCustomers();
+          fetchTransactions(cid);
+        } else {
+          showNotification("交易失敗: " + data.error, "error");
+        }
+      } catch (err) {
+        showNotification("交易錯誤: " + err.message, "error");
+      }
+    }
+    
+    async function fetchTransactions(cid) {
+      try {
+        const res = await fetch(`/users/${cid}/transactions`);
+        const txs = await res.json();
+        const dv = document.getElementById('transactions-display');
+        dv.innerHTML = "";
+        if (res.ok) {
+          if (txs.length === 0) {
+            dv.innerHTML = "<p>沒有交易紀錄</p>";
+          } else {
+            const listHtml = txs.map(t => {
+              const dateObj = new Date(t.created_at);
+              const formattedDate = dateObj.toLocaleDateString();
+              const formattedTime = t.type === 'withdraw' ? "" : dateObj.toLocaleTimeString();
+              let detailsHtml = "";
+              if (t.details) {
+                detailsHtml = `<br/>品項:<br/>${t.details.split(' / ').join('<br/>')}`;
+              }
+              const typeText = t.type === 'deposit' ? '儲值' : '扣款';
+              return `<p>${formattedDate} ${formattedTime} | ${typeText}: $${formatAmount(t.amount)}${detailsHtml}</p>`;
+            }).join("");
+            dv.innerHTML += listHtml;
+          }
+        } else {
+          dv.innerHTML = `<p>查詢失敗: ${txs.error}</p>`;
+        }
+      } catch (err) {
+        showNotification("無法查詢交易紀錄: " + err.message, "error");
+      }
+    }
+    
+    /************** 收據列印功能 **************/
+    function printReceipt() {
+      const receiptHTML = document.getElementById('receipt-print-area').innerHTML;
+      const pw = window.open('', '', 'width=500,height=600');
+      pw.document.write(`
+        <html>
+          <head>
+            <meta charset="UTF-8" />
+            <title>列印收據</title>
+            <link rel="stylesheet" href="style.css" />
+          </head>
+          <body>
+            <div id="receipt-print-area">
+              ${receiptHTML}
+            </div>
+            <script>
+              function waitForImages(callback) {
+                const images = document.querySelectorAll('img');
+                let loaded = 0;
+                if (images.length === 0) callback();
+                images.forEach(img => {
+                  if (img.complete) {
+                    loaded++;
+                    if (loaded === images.length) callback();
+                  } else {
+                    img.onload = img.onerror = () => {
+                      loaded++;
+                      if (loaded === images.length) callback();
+                    };
+                  }
+                });
+              }
+              waitForImages(() => {
+                window.print();
+                window.close();
+              });
+            <\/script>
+          </body>
+        </html>
+      `);
+      pw.document.close();
+      pw.focus();
+    }
+    
+    /**************
+     * 列印今日最新單筆交易紀錄（只印該筆交易）
+     * 最適合80mm感熱紙：內容靠左、字體較大
+     **************/
+    async function printTodayTransactionsReceipt(cid, cname, cbalance, pstatus, ddate) {
+      try {
+        const res = await fetch(`/users/${cid}/transactions`);
+        const txs = await res.json();
+        if (!res.ok) {
+          showNotification("查詢失敗: " + txs.error, "error");
+          return;
+        }
+        const todayStr = getLocalDateString();
+        const todayTx = txs.filter(t => {
+          const dt = new Date(t.created_at);
+          const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+          return ds === todayStr;
+        });
+        if (todayTx.length === 0) {
+          showNotification("今天沒有交易紀錄", "error");
+          return;
+        }
+        const latestTx = todayTx.reduce((prev, curr) => {
+          return new Date(curr.created_at) > new Date(prev.created_at) ? curr : prev;
+        });
+        let preBalance = cbalance;
+        if (latestTx.type === 'deposit') {
+          preBalance = cbalance - parseFloat(latestTx.amount);
+        } else if (latestTx.type === 'withdraw') {
+          preBalance = cbalance + parseFloat(latestTx.amount);
+        }
+        const formattedDate = parseDeliveryDate(ddate);
+        let txHtml = `
+          <div style="margin-bottom: 6px;">
+            ${latestTx.type === 'deposit' ? '儲值' : '扣款'}：$${formatAmount(latestTx.amount)}
+        `;
+        if (latestTx.details) {
+          txHtml += latestTx.details
+                      .split(' / ')
+                      .map(item => `<div style="margin-left: 0;">${item}</div>`)
+                      .join('');
+        }
+        txHtml += `</div>`;
+        const printTime = new Date().toLocaleString();
+        
+        let warningMsg = "";
+        if (cbalance < 0) { warningMsg = "提醒：餘額不足！"; }
+        else if (cbalance < 500) { warningMsg = "提醒：餘額不足！"; }
+        else if (cbalance <= 1000) { warningMsg = "提醒：餘額不足！"; }
+        
+        const finalHTML = `
+          <div style="font-size: 20px; line-height: 1.4;">
+            <!-- 店家資訊 (含 QR Code) -->
+            <div style="text-align:center; margin-bottom: 10px;">
+              <div style="font-weight: bold; font-size: 24px; margin-bottom: 6px;">
+                鑫元貿易有限公司
+              </div>
+              <img src="/images/qrcode.jpg" alt="QR Code" style="width: 100px; margin-bottom: 6px; display:block; margin-left:auto; margin-right:auto;" />
+              <div style="font-weight:bold;">鑫元蛋行</div>
+              <div style="font-size:18px;">高雄市三民區遼寧二街172號</div>
+              <div style="font-weight:bold;">訂購專線：0935-123-103</div>
+              <div style="font-weight:bold;">LINE：@egg888</div>
+            </div>
+            <!-- 客戶資訊 -->
+            <hr style="border: none; border-bottom: 1px solid #000;" />
+            <div style="text-align: center; font-weight: bold; font-size: 22px; margin: 10px 0;">
+              客戶資訊
+            </div>
+            <hr style="border: none; border-bottom: 1px solid #000; margin-bottom: 10px;" />
+            <div style="margin-left: 0; margin-bottom: 10px; font-size: 18px;">
+              <div>客戶：${cname}</div>
+              <div>配送日期：${formattedDate}</div>
+              <div>付款狀態：${pstatus}</div>
+              <div>前餘額：$${formatAmount(preBalance)}</div>
+            </div>
+            <!-- 最新交易紀錄 -->
+            <hr style="border: none; border-bottom: 1px solid #000;" />
+            <div style="text-align: center; font-weight: bold; font-size: 22px; margin: 10px 0;">
+              交易紀錄
+            </div>
+            <hr style="border: none; border-bottom: 1px solid #000; margin-bottom: 10px;" />
+            <div style="margin-left: 0; font-size: 18px;">
+              ${txHtml}
+            </div>
+            <div style="margin-left: 0; margin-top: 10px; font-weight: bold; font-size: 18px;">
+              扣款後餘額：$${formatAmount(cbalance)}
+            </div>
+            ${warningMsg ? `<p style="color:red; font-weight:bold;">${warningMsg}</p>` : ""}
+            <div style="margin-left: 0; margin-top: 10px; font-size: 16px;">
+              ${printTime}
+            </div>
+          </div>
+        `;
+        document.getElementById('receipt-print-area').innerHTML = finalHTML;
+        printReceipt();
+      } catch (err) {
+        showNotification("查詢失敗: " + err.message, "error");
+      }
+    }
+    
+    // 匯出客戶資料 (CSV)
+    function exportCustomerData() {
+      if (!customersList || customersList.length === 0) {
+        alert("目前沒有客戶資料可供匯出！");
+        return;
+      }
+      let csvContent = "ID,Username,Balance,Payment Status,Delivery Date,Plan\n";
+      customersList.forEach(c => {
+        const row = [
+          c.id,
+          `"${c.username}"`,
+          c.balance,
+          `"${c.payment_status}"`,
+          `"${c.delivery_date || ''}"`,
+          c.plan
+        ].join(",");
+        csvContent += row + "\n";
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const todayStr = new Date().toISOString().split("T")[0];
+      link.setAttribute("href", url);
+      link.setAttribute("download", `customer_data_${todayStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // 監聽「新增客戶」表單提交
+    document.getElementById('new-customer-form').addEventListener('submit', addCustomer);
+    
+    // 頁面載入後，自動抓取客戶清單
+    fetchCustomers();
+    
+    // Modal 點擊背景關閉功能
+    window.onclick = function(event) {
+      const modals = document.getElementsByClassName('modal');
+      for (let modal of modals) {
+        if (event.target === modal) { modal.style.display = "none"; }
+      }
+    }
+  </script>
+</body>
+</html>

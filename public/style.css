@@ -1,0 +1,327 @@
+/* Reset CSS */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* 主體背景與字型 */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+  color: #333;
+  line-height: 1.6;
+  padding: 20px;
+}
+
+/* 主要容器 */
+.container {
+  max-width: 900px;
+  margin: 40px auto;
+  background: #fff;
+  padding: 30px 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 通知欄位 */
+#notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 5px;
+  display: none;
+  font-size: 1em;
+  z-index: 100;
+}
+#notification.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+#notification.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* 標題樣式 */
+h1, h2, h3, h4 {
+  margin-bottom: 15px;
+  color: #444;
+}
+h1 {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+/* 表單與區塊 */
+form, .section {
+  margin-bottom: 25px;
+}
+input[type="text"],
+input[type="number"],
+select,
+button {
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 1em;
+  transition: border-color 0.3s ease;
+}
+input[type="text"],
+select {
+  width: 100%;
+}
+input:focus, select:focus {
+  border-color: #007BFF;
+  outline: none;
+}
+button {
+  background: #007BFF;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+button:hover {
+  background: #0056b3;
+}
+
+/* 客戶列表（卡片風格，美化版） */
+#customers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+  padding: 0; /* 移除預設 ul 的 padding */
+}
+#customers-list li {
+  list-style: none;
+  background-color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+#customers-list li:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 客戶資訊（列表中僅顯示基本資訊） */
+.customer-info {
+  margin-bottom: 0;
+}
+.customer-name {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+}
+.customer-balance {
+  font-size: 1.1em;
+  color: #007BFF;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.delivery-date {
+  font-size: 0.95em;
+  color: #888;
+}
+
+/* 列表中若有按鈕群組則隱藏（操作按鈕改在下方詳細資訊區顯示） */
+#customers-list li .btn-group {
+  display: none;
+}
+
+/* 客戶詳細資訊區塊（點選客戶後在下方顯示詳細資訊與操作按鈕） */
+#customer-details {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  display: none;  /* 初始狀態隱藏 */
+}
+#customer-details.active {
+  display: block;
+}
+#customer-details .customer-info {
+  margin-bottom: 15px;
+}
+#customer-details .customer-name {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+}
+#customer-details .customer-balance {
+  font-size: 1.1em;
+  color: #007BFF;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+#customer-details .delivery-date {
+  font-size: 0.95em;
+  color: #888;
+}
+/* 詳細資訊區的按鈕群組 */
+#customer-details .btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+#customer-details .btn-group button {
+  flex: none;
+  padding: 10px 15px;
+  font-size: 0.9em;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #007BFF;
+  color: #fff;
+  transition: background-color 0.3s ease;
+}
+#customer-details .btn-group button:hover {
+  background-color: #0056b3;
+}
+
+/* 交易紀錄 */
+#transactions-display p {
+  background: #f1f1f1;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+/* Modal 風格 */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+.modal-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 400px;
+}
+.modal-content input,
+.modal-content select,
+.modal-content button {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.modal-content .item-buttons button {
+  width: auto;
+  margin-right: 5px;
+  margin-bottom: 5px;
+}
+
+/* 扣款數量控制 */
+#quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+#quantity-control button {
+  width: 34px;
+  height: 34px;
+  font-size: 1em;
+  background-color: #007BFF;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#quantity-control button:hover {
+  background-color: #0056b3;
+}
+#quantity-input {
+  width: 70px;
+  font-size: 1em;
+  text-align: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* 隱藏數字輸入框上下箭頭 */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* ===================== 列印樣式 ===================== */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  body * { 
+    display: none !important; 
+  }
+  #receipt-print-area,
+  #receipt-print-area * { 
+    display: block !important;
+    visibility: visible !important;
+  }
+  #receipt-print-area {
+    display: block;
+    margin: 0 auto;
+    max-width: 80mm;
+  }
+  .store-name {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 12px;
+  }
+  .receipt-section p {
+    margin: 6px 0;
+  }
+  .receipt-qrcode img {
+    display: block;
+    margin: 0 auto 12px auto;
+    max-width: 180px;
+  }
+  .divider { 
+    border: none;
+    border-bottom: 1px solid #ccc;
+    margin: 12px 0;
+  }
+  .transaction-title {
+    font-weight: bold;
+    margin: 12px 0 6px 0;
+  }
+  .transaction-item { 
+    margin-left: 15px;
+  }
+  .print-time { 
+    text-align: right;
+    font-size: 12px;
+    margin-top: 15px;
+  }
+}
